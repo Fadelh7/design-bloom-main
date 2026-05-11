@@ -1,4 +1,3 @@
----
 deployment:
   tasks:
     - /usr/bin/env npm run cpanel:deploy
