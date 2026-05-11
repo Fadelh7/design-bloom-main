@@ -35,26 +35,51 @@ app.post('/api/health', (_req, res) => {
   res.status(200).json({ ok: true, service: 'designbyhala-api', method: 'POST' });
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+const parseRequestBody = (req) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
 
-app.use((err, req, res, next) => {
-  if (!err) return next();
+    req.on('data', (chunk) => {
+      chunks.push(Buffer.from(chunk));
+    });
 
-  console.error('[parser] Request parse failed:', {
-    method: req.method,
-    path: req.path,
-    contentType: req.headers['content-type'],
-    message: err.message,
-    type: err.type,
+    req.on('end', () => {
+      const rawBody = Buffer.concat(chunks).toString('utf8');
+      const contentType = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+
+      if (!rawBody) {
+        resolve({});
+        return;
+      }
+
+      try {
+        if (contentType === 'application/json') {
+          resolve(JSON.parse(rawBody));
+          return;
+        }
+
+        if (contentType === 'application/x-www-form-urlencoded') {
+          resolve(Object.fromEntries(new URLSearchParams(rawBody)));
+          return;
+        }
+
+        resolve({ rawBody });
+      } catch (error) {
+        reject({
+          message: error.message,
+          type: 'parse_error',
+          contentType,
+        });
+      }
+    });
+
+    req.on('error', (error) => {
+      reject({
+        message: error.message,
+        type: 'stream_error',
+      });
+    });
   });
-
-  return res.status(400).json({
-    message: 'Invalid request body',
-    detail: err.message,
-    type: err.type || 'parse_error',
-  });
-});
 
 // Configure mail transport: prefer SMTP (your own server), optional SendGrid fallback
 const useSendGrid = Boolean(process.env.SENDGRID_API_KEY);
@@ -99,9 +124,29 @@ if (!useSendGrid) {
 app.post('/api/send-message', async (req, res) => {
   console.log('[request] POST /api/send-message');
   console.log('[request] Content-Type:', req.headers['content-type']);
-  console.log('[request] Body:', JSON.stringify(req.body));
 
-  const { name, email, service, message } = req.body;
+  let body;
+  try {
+    body = await parseRequestBody(req);
+  } catch (error) {
+    console.error('[parser] Request parse failed:', {
+      method: req.method,
+      path: req.path,
+      contentType: req.headers['content-type'],
+      message: error.message,
+      type: error.type,
+    });
+
+    return res.status(400).json({
+      message: 'Invalid request body',
+      detail: error.message,
+      type: error.type || 'parse_error',
+    });
+  }
+
+  console.log('[request] Body:', JSON.stringify(body));
+
+  const { name, email, service, message } = body;
 
   if (!name || !email || !message) {
     console.warn('[request] Validation failed — missing required fields:', { name: !!name, email: !!email, message: !!message });
