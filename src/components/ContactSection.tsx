@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Send, Instagram, Linkedin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,8 @@ export const ContactSection = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
-  const API_BASE = (import.meta as any).env?.VITE_API_BASE || "http://localhost:5000";
+  const API_BASE =
+    (import.meta as any).env?.VITE_API_BASE ?? (import.meta.env.DEV ? "http://localhost:5000" : "");
 
   // Submit via backend API to deliver to the target inbox
   const handleApiSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -56,11 +57,6 @@ export const ContactSection = () => {
       setSubmitting(false);
     }
   };
-
-  // No async submission here; mailto opens the user's email client
-  useEffect(() => {}, []);
-
- 
 
   return (
     <section id="contact" className="py-24 bg-muted/30">

@@ -4,8 +4,14 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import sgMail from '@sendgrid/mail';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.join(__dirname, 'dist');
 
 console.log('[boot] Environment loaded');
 console.log('[boot] SMTP_HOST   :', process.env.SMTP_HOST);
@@ -145,10 +151,31 @@ app.post('/api/send-message', async (req, res) => {
   }
 });
 
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'designbyhala-api' });
+});
+
+// Serve compiled Vite frontend from dist for single-host cPanel deployment.
+app.use(express.static(distPath));
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+
+  const indexFile = path.join(distPath, 'index.html');
+  if (!fs.existsSync(indexFile)) {
+    return res.status(503).send('Frontend build not found. Run: npm run build');
+  }
+
+  return res.sendFile(indexFile);
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`[server] Listening on port ${PORT}`);
   console.log(`[server] POST http://localhost:${PORT}/api/send-message`);
+  console.log(`[server] Frontend path: ${distPath}`);
 });
 
 // TEMP: simple GET endpoint to verify email sending without JSON body
