@@ -7,6 +7,15 @@ import fs from 'fs';
 
 dotenv.config();
 
+console.log('[boot] Environment loaded');
+console.log('[boot] SMTP_HOST   :', process.env.SMTP_HOST);
+console.log('[boot] SMTP_PORT   :', process.env.SMTP_PORT);
+console.log('[boot] SMTP_SECURE :', process.env.SMTP_SECURE);
+console.log('[boot] EMAIL_USER  :', process.env.EMAIL_USER);
+console.log('[boot] FROM_EMAIL  :', process.env.FROM_EMAIL);
+console.log('[boot] TO_EMAIL    :', process.env.TO_EMAIL);
+console.log('[boot] EMAIL_PASS  :', process.env.EMAIL_PASS ? '*** (set)' : '!!! NOT SET');
+
 const app = express();
 
 app.use(cors());
@@ -16,7 +25,10 @@ app.use(express.urlencoded({ extended: true }));
 // Configure mail transport: prefer SMTP (your own server), optional SendGrid fallback
 const useSendGrid = Boolean(process.env.SENDGRID_API_KEY);
 if (useSendGrid) {
+  console.log('[boot] Mail mode: SendGrid');
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+} else {
+  console.log('[boot] Mail mode: SMTP (Nodemailer)');
 }
 
 // TLS options: allow self-signed certs if configured, or provide a CA
@@ -38,19 +50,31 @@ const smtpTransport = nodemailer.createTransport({
   tls: tlsOptions,
 });
 
+// Verify SMTP connection at startup so failures are visible immediately
+if (!useSendGrid) {
+  smtpTransport.verify((err, success) => {
+    if (err) {
+      console.error('[smtp] Connection verification FAILED:', err.message);
+      console.error('[smtp] Full error:', err);
+    } else {
+      console.log('[smtp] Connection verified successfully — ready to send mail');
+    }
+  });
+}
+
 app.post('/api/send-message', async (req, res) => {
-  // Debug: log incoming body and content type
-  try {
-    console.log('Incoming /api/send-message', {
-      contentType: req.headers['content-type'],
-      body: req.body,
-    });
-  } catch (_) {}
+  console.log('[request] POST /api/send-message');
+  console.log('[request] Content-Type:', req.headers['content-type']);
+  console.log('[request] Body:', JSON.stringify(req.body));
+
   const { name, email, service, message } = req.body;
 
   if (!name || !email || !message) {
+    console.warn('[request] Validation failed — missing required fields:', { name: !!name, email: !!email, message: !!message });
     return res.status(400).json({ message: 'Name, email, and message are required' });
   }
+
+  console.log('[request] Validated — preparing email to:', process.env.TO_EMAIL);
 
   const from = process.env.FROM_EMAIL || process.env.EMAIL_USER || 'no-reply@designbyhala.art';
   const to = process.env.TO_EMAIL || 'hello@designbyhala.art';
@@ -102,20 +126,29 @@ app.post('/api/send-message', async (req, res) => {
 
   try {
     if (useSendGrid) {
+      console.log('[sendgrid] Sending via SendGrid to:', to);
       await sgMail.send({ to, from: { email: from, name: brandName }, subject, text, html });
+      console.log('[sendgrid] Sent successfully');
     } else {
-      await smtpTransport.sendMail({ from: `${brandName} <${from}>`, to, subject, text, html });
+      console.log('[smtp] Sending via SMTP —', process.env.SMTP_HOST + ':' + process.env.SMTP_PORT, '| to:', to);
+      const info = await smtpTransport.sendMail({ from: `${brandName} <${from}>`, to, subject, text, html });
+      console.log('[smtp] Sent successfully. MessageId:', info.messageId);
     }
     res.status(200).json({ message: 'Email sent successfully' });
   } catch (error) {
-    console.error('Error sending email:', error);
-    res.status(500).json({ message: 'Failed to send email' });
+    console.error('[error] Failed to send email');
+    console.error('[error] Message:', error.message);
+    console.error('[error] Code:', error.code);
+    console.error('[error] Response:', error.response);
+    console.error('[error] Full error:', error);
+    res.status(500).json({ message: 'Failed to send email', detail: error.message });
   }
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`[server] Listening on port ${PORT}`);
+  console.log(`[server] POST http://localhost:${PORT}/api/send-message`);
 });
 
 // TEMP: simple GET endpoint to verify email sending without JSON body
