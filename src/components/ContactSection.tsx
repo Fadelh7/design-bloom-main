@@ -29,13 +29,17 @@ export const ContactSection = () => {
 
   const API_BASE =
     (import.meta as any).env?.VITE_API_BASE ?? (import.meta.env.DEV ? "http://localhost:5000" : "");
+  const normalizedBase = API_BASE.replace(/\/+$/, "");
+  const endpoint = normalizedBase.endsWith("/api")
+    ? `${normalizedBase}/send-message`
+    : `${normalizedBase}/api/send-message`;
 
   // Submit via backend API to deliver to the target inbox
   const handleApiSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
       setSubmitting(true);
-      const res = await fetch(`${API_BASE}/api/send-message`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
