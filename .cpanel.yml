@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/bash -lc 'if [ -x "$HOME/nodevenv/repositories/design-bloom-main/20/bin/npm" ]; then "$HOME/nodevenv/repositories/design-bloom-main/20/bin/npm" run cpanel:deploy; else /usr/bin/env npm run cpanel:deploy; fi'
+    - /bin/bash -lc 'NPM_BIN=$(ls -1d "$HOME"/nodevenv/repositories/design-bloom-main/*/bin/npm 2>/dev/null | sort -V | tail -n 1); if [ -x "$NPM_BIN" ]; then "$NPM_BIN" run cpanel:deploy; else /usr/bin/env npm run cpanel:deploy; fi'
