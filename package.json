@@ -12,6 +12,7 @@
     "start": "node server.js",
     "server": "node server.js",
     "cpanel:restart": "node -e \"const fs=require('fs');fs.mkdirSync('tmp',{recursive:true});fs.closeSync(fs.openSync('tmp/restart.txt','w'));console.log('Passenger restart signaled');\"",
+    "cpanel:deploy": "npm ci && npm run build && npm run cpanel:restart",
     "cpanel:update": "git pull origin main && npm ci && npm run build && npm run cpanel:restart"
   },
   "dependencies": {
