@@ -25,8 +25,36 @@ console.log('[boot] EMAIL_PASS  :', process.env.EMAIL_PASS ? '*** (set)' : '!!! 
 const app = express();
 
 app.use(cors());
+
+// Keep health endpoints ahead of body parsers to isolate proxy vs parser issues.
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'designbyhala-api' });
+});
+
+app.post('/api/health', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'designbyhala-api', method: 'POST' });
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((err, req, res, next) => {
+  if (!err) return next();
+
+  console.error('[parser] Request parse failed:', {
+    method: req.method,
+    path: req.path,
+    contentType: req.headers['content-type'],
+    message: err.message,
+    type: err.type,
+  });
+
+  return res.status(400).json({
+    message: 'Invalid request body',
+    detail: err.message,
+    type: err.type || 'parse_error',
+  });
+});
 
 // Configure mail transport: prefer SMTP (your own server), optional SendGrid fallback
 const useSendGrid = Boolean(process.env.SENDGRID_API_KEY);
@@ -149,10 +177,6 @@ app.post('/api/send-message', async (req, res) => {
     console.error('[error] Full error:', error);
     res.status(500).json({ message: 'Failed to send email', detail: error.message });
   }
-});
-
-app.get('/api/health', (_req, res) => {
-  res.status(200).json({ ok: true, service: 'designbyhala-api' });
 });
 
 // Serve compiled Vite frontend from dist for single-host cPanel deployment.
